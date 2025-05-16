@@ -1,0 +1,31 @@
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Telegram session files
+*.session
+*.session-journal
+
+# Downloaded media
+downloaded_media/
+
+# User configurations
+.teleripper/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
