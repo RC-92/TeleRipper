@@ -29,3 +29,6 @@ downloaded_media/
 .vscode/
 *.swp
 *.swo
+environment.json
+*.session
+__pycache__/
