@@ -1,53 +1,51 @@
 #!/usr/bin/env python3
+"""TeleRipper - Telegram Channel Media Downloader"""
+
 import os
 import sys
+import json
 import argparse
-import configparser
-import getpass
 from pathlib import Path
 from telethon.sync import TelegramClient
 from telethon.errors import RPCError
 from telethon.tl.types import MessageMediaDocument, DocumentAttributeVideo
 
-def create_config_if_not_exists():
-    """Create config file if it doesn't exist and prompt for API credentials"""
-    config_dir = Path.home() / '.teleripper'
-    config_file = config_dir / 'config.ini'
+SCRIPT_DIR = Path(__file__).resolve().parent
+ENV_FILE = SCRIPT_DIR / 'environment.json'
+SESSION_NAME = 'TeleRipper'
 
-    if not config_dir.exists():
-        config_dir.mkdir(parents=True)
 
-    config = configparser.ConfigParser()
-
-    if not config_file.exists():
-        print("No configuration found. Let's set up your API credentials.")
-        print("You can get these from https://my.telegram.org/apps")
-
-        api_id = input("Enter your API ID: ")
-        api_hash = getpass.getpass("Enter your API Hash: ")
-
-        config['Telegram'] = {
-            'api_id': api_id,
-            'api_hash': api_hash,
-            'session_name': 'TeleRipper'
-        }
-
-        with open(config_file, 'w') as f:
-            config.write(f)
-
-        print(f"Configuration saved to {config_file}")
-        return api_id, api_hash, 'TeleRipper'
-
-    config.read(config_file)
-    if 'Telegram' in config:
-        return (
-            config['Telegram'].get('api_id'),
-            config['Telegram'].get('api_hash'),
-            config['Telegram'].get('session_name', 'TeleRipper')
-        )
-    else:
-        print("Invalid config file. Please delete ~/.teleripper/config.ini and run again.")
+def load_config():
+    """Load API credentials from environment.json"""
+    if not ENV_FILE.exists():
+        print(f"Error: {ENV_FILE} not found.")
+        print(f"Create it in {SCRIPT_DIR} with the following format:")
+        print(json.dumps({"API_ID": "", "API_HASH": ""}, indent=4))
         sys.exit(1)
+
+    try:
+        with open(ENV_FILE, 'r') as f:
+            config = json.load(f)
+    except json.JSONDecodeError:
+        print(f"Error: {ENV_FILE} is not valid JSON.")
+        sys.exit(1)
+
+    api_id = config.get('API_ID', '')
+    api_hash = config.get('API_HASH', '')
+
+    if not api_id or not api_hash:
+        print(f"Error: API_ID and API_HASH must be set in {ENV_FILE}")
+        print("Get your credentials from https://my.telegram.org/apps")
+        sys.exit(1)
+
+    try:
+        api_id = int(api_id)
+    except ValueError:
+        print("Error: API_ID must be a number.")
+        sys.exit(1)
+
+    return api_id, api_hash
+
 
 def list_channels(client):
     """List all channels the user has joined"""
@@ -71,8 +69,9 @@ def list_channels(client):
 
     return channels
 
+
 def download_media(client, channel_id, download_dir=None, limit=None, media_types=None):
-    """Download media files from specified channel including videos, photos, documents, etc."""
+    """Download media files from specified channel"""
     if media_types is None:
         media_types = ['all']
 
@@ -107,7 +106,6 @@ def download_media(client, channel_id, download_dir=None, limit=None, media_type
                     channel_id = f"-100{channel_id[1:]}"
                 else:
                     channel_id = f"-100{channel_id}"
-
             try:
                 entity = client.get_entity(int(channel_id))
             except:
@@ -234,20 +232,12 @@ def download_media(client, channel_id, download_dir=None, limit=None, media_type
         import traceback
         traceback.print_exc()
 
-def main():
-    # Check for config BEFORE parsing args — first run needs credential setup
-    config_file = Path.home() / '.teleripper' / 'config.ini'
-    if not config_file.exists():
-        create_config_if_not_exists()
-        print("\nSetup complete. You can now run the tool with --lc or --d <CHANNEL_ID>.")
-        return
 
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Telegram Channel Media Downloader')
+def main():
+    parser = argparse.ArgumentParser(description='TeleRipper - Telegram Channel Media Downloader')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--lc', '--listchannels', action='store_true', help='List all channels')
     group.add_argument('--d', '--download', metavar='CHANNEL_ID', help='Download media from channel ID')
-    group.add_argument('--reset-config', action='store_true', help='Reset API configuration')
 
     parser.add_argument('--limit', type=int, help='Limit number of messages to check')
     parser.add_argument('--dir', help='Download directory (default: downloaded_media)')
@@ -256,31 +246,11 @@ def main():
 
     args = parser.parse_args()
 
-    # Reset config if requested
-    if args.reset_config:
-        config_path = Path.home() / '.teleripper' / 'config.ini'
-        if config_path.exists():
-            confirm = input("Are you sure you want to reset your API credentials? (y/n): ")
-            if confirm.lower() in ['y', 'yes']:
-                os.remove(config_path)
-                print("Configuration reset. You'll be prompted for API credentials on next run.")
-            else:
-                print("Reset cancelled.")
-            return
-        else:
-            print("No configuration file found. Nothing to reset.")
-
-    # Get API credentials
-    api_id, api_hash, session_name = create_config_if_not_exists()
+    # Load credentials from environment.json
+    api_id, api_hash = load_config()
 
     try:
-        api_id = int(api_id)
-    except ValueError:
-        print("Error: API ID must be a number. Please reset configuration with --reset-config")
-        return
-
-    try:
-        with TelegramClient(session_name, api_id, api_hash) as client:
+        with TelegramClient(SESSION_NAME, api_id, api_hash) as client:
             if args.lc:
                 list_channels(client)
             elif args.d:
@@ -299,6 +269,7 @@ def main():
         print(f"An unexpected error occurred: {e}")
         import traceback
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     main()
